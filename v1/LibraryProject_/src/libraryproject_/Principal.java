@@ -3,26 +3,45 @@
  * Click nbfs://nbhost/SystemFileSystem/Templates/GUIForms/JFrame.java to edit this template
  */
 package libraryproject_;
+import java.io.IOException;
 import java.sql.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.JOptionPane;
 /**
+ * Login window. Checks the credentials against the users table and opens
+ * the dashboard that matches the account's role.
  *
  * @author kevin
  */
 public class Principal extends javax.swing.JFrame {
 
     Connection connection;
-    public Principal() throws ClassNotFoundException, SQLException {
+    public Principal() throws IOException, SQLException {
         initComponents();
-        this.connection = null;
-        Class.forName("com.mysql.cj.jdbc.Driver");
-        this.connection = DriverManager.getConnection(
-                "jdbc:mysql://localhost:3306/libreria",
-                "root", "Jossa123#//");
+        // Credentials come from db.properties instead of being hardcoded here
+        this.connection = Database.connect();
         this.setLocationRelativeTo(null);
         this.setTitle("Welcome !");
+    }
+
+    /**
+     * Opens a new login window. If the database is not reachable it shows
+     * the reason in a dialog instead of failing silently in the log.
+     *
+     * @return true if the window was opened
+     */
+    public static boolean showLogin() {
+        try {
+            new Principal().setVisible(true);
+            return true;
+        } catch (IOException | SQLException ex) {
+            Logger.getLogger(Principal.class.getName()).log(Level.SEVERE, null, ex);
+            JOptionPane.showMessageDialog(null,
+                    "Could not connect to the database:\n" + ex.getMessage(),
+                    "E R R O R", JOptionPane.ERROR_MESSAGE);
+            return false;
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -124,64 +143,44 @@ public class Principal extends javax.swing.JFrame {
     }//GEN-LAST:event_field1ActionPerformed
 
     private void jButton1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton1ActionPerformed
-        try {
-            String username, password;
-            username = field1.getText();
-            password = field2.getText();
-            PreparedStatement stmt = this.connection.prepareStatement("select * from users where username=? and password=?", ResultSet.TYPE_SCROLL_SENSITIVE, ResultSet.CONCUR_READ_ONLY);
-            
-            System.out.println("Username: " + username);
-            System.out.println("Password: " + password);
+        String username = field1.getText();
+        // getPassword() replaces the deprecated getText() of JPasswordField
+        String password = new String(field2.getPassword());
+
+        // Only the role is needed; the password is never printed or logged anymore
+        String sql = "select role from users where username=? and password=?";
+        // try-with-resources closes the statement and result set automatically
+        try (PreparedStatement stmt = this.connection.prepareStatement(sql)) {
             stmt.setString(1, username);
             stmt.setString(2, password);
-            ResultSet rs = stmt.executeQuery();
 
-            int records = 0;
-            
-            while(rs.next()) {
-                records +=1;
-            }
-            rs.first();
-            
-            if(records == 1) {
-                
-                if(rs.getString("username").equals("jossax123") && rs.getString("password").equals("jossa123#")) {
+            try (ResultSet rs = stmt.executeQuery()) {
+                // username is UNIQUE in schema.sql, so there is at most one row
+                if (!rs.next()) {
+                    JOptionPane.showMessageDialog(this, "Please enter valid credentials","E R R O R", JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
+
+                // The role column replaces the admin credentials hardcoded here before
+                if ("admin".equals(rs.getString("role"))) {
                     JOptionPane.showMessageDialog(this, "You Login as an Administrator");
-                    AdminDashboard a = new AdminDashboard(connection);
-                    a.setVisible(true);
-                    this.setVisible(false);
-                }
-                else if(username.equals(rs.getString("username")) && password.equals(rs.getString("password"))) {
+                    new AdminDashboard(connection).setVisible(true);
+                } else {
                     JOptionPane.showMessageDialog(this, "You Login as a Librarian");
-                    LibrarianDashboard l = new LibrarianDashboard(connection);
-                    l.setVisible(true);
-                    this.setVisible(false);
+                    new LibrarianDashboard(connection).setVisible(true);
                 }
+                // dispose() frees the window instead of just hiding it
+                this.dispose();
             }
-            else {
-                JOptionPane.showMessageDialog(this, "Please enter valid credentials","E R R O R", JOptionPane.ERROR_MESSAGE);
-            }
-            
-        rs.close();
-        
         } catch (SQLException ex) {
             Logger.getLogger(Principal.class.getName()).log(Level.SEVERE, null, ex);
+            JOptionPane.showMessageDialog(this, "Database error:\n" + ex.getMessage(), "E R R O R", JOptionPane.ERROR_MESSAGE);
         }
     }//GEN-LAST:event_jButton1ActionPerformed
 
     public static void main(String args[]) {
-        
-        java.awt.EventQueue.invokeLater(new Runnable() {
-            public void run() {
-                try {
-                    new Principal().setVisible(true);
-                } catch (ClassNotFoundException ex) {
-                    Logger.getLogger(Principal.class.getName()).log(Level.SEVERE, null, ex);
-                } catch (SQLException ex) {
-                    Logger.getLogger(Principal.class.getName()).log(Level.SEVERE, null, ex);
-                }
-            }
-        });
+        // Swing windows must be created on the Event Dispatch Thread
+        java.awt.EventQueue.invokeLater(Principal::showLogin);
     }
 
     // Variables declaration - do not modify//GEN-BEGIN:variables

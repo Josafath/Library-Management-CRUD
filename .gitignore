@@ -1,0 +1,17 @@
+# NetBeans / Ant build output
+build/
+dist/
+**/nbproject/private/
+
+# Local database credentials (copy db.properties.example)
+db.properties
+
+# MySQL JDBC driver: download it into lib/ (see README)
+**/lib/*.jar
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.class

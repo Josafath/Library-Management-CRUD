@@ -2,7 +2,9 @@ package libraryproject_;
 
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.Reader;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -34,7 +36,9 @@ public final class Database {
      */
     public static Connection connect() throws IOException, SQLException {
         Properties config = new Properties();
-        try (InputStream in = new FileInputStream(CONFIG_FILE)) {
+        // Read the file as UTF-8: load(InputStream) assumes ISO-8859-1 and
+        // would corrupt passwords with characters like ñ or accents
+        try (Reader in = new InputStreamReader(new FileInputStream(CONFIG_FILE), StandardCharsets.UTF_8)) {
             config.load(in);
         } catch (IOException ex) {
             throw new IOException("Could not read " + CONFIG_FILE

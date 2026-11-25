@@ -6,17 +6,17 @@ package libraryproject_;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.sql.*;
-import java.util.*;
 import javax.swing.JOptionPane;
 import javax.swing.table.DefaultTableModel;
 /**
+ * Librarian window: add, list and delete books.
  *
  * @author kevin
  */
 public class LibrarianDashboard extends javax.swing.JFrame {
 
     /**
-     * 
+     * Creates new form LibrarianDashboard
      */
     Connection connection;
     DefaultTableModel model;
@@ -28,47 +28,41 @@ public class LibrarianDashboard extends javax.swing.JFrame {
         librarian_list();
     }
 
-    private LibrarianDashboard() {
-        throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
+    // Shows SQL errors to the user instead of only writing them to the log
+    private void showError(SQLException ex) {
+        Logger.getLogger(LibrarianDashboard.class.getName()).log(Level.SEVERE, null, ex);
+        JOptionPane.showMessageDialog(this, "Database error:\n" + ex.getMessage(), "E R R O R", JOptionPane.ERROR_MESSAGE);
     }
-    
-    
+
+    // Reloads the table with every book in the catalog
     public void librarian_list() {
-        try {
-                PreparedStatement stmt = this.connection.prepareStatement("select * from book",ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY);
-                
-                ResultSet rs = stmt.executeQuery();
-                
-               
-                int records = 0;
-                if(rs.last()) {
-                    records = rs.getRow();
-                    rs.first();
-                }
-                String[] titulos = {"ID", "Titulo", "Autor", "Genero", "Status", "Editorial"};
-                String [][] data = new String[records][6];
-                
-                for (int i = 0; i < records; i++) {
-                    data[i][0] = String.valueOf(rs.getInt("idbook"));
-                    data[i][1] = rs.getString("title");
-                    data[i][2] = rs.getString("author");
-                    data[i][3] = rs.getString("genre");
-                    if(rs.getInt("status") == 1){
-                        data[i][4] = "Available";
-                    } else data[i][4] = "Occupied";
-                    
-                    data[i][5] = rs.getString("editorial");
-                    rs.next();
-                }
-                
-                System.out.println("# de records: " + records);
-                
-                model = new DefaultTableModel(data, titulos);
-                jTable1.setModel(model);
-                
-            } catch (SQLException ex) {
-                Logger.getLogger(AdminDashboard.class.getName()).log(Level.SEVERE, null, ex);
+        String[] titulos = {"ID", "Titulo", "Autor", "Genero", "Status", "Editorial"};
+        // Start with an empty table and add one row per record
+        model = new DefaultTableModel(titulos, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false; // the table is read-only; changes go through the form
             }
+        };
+
+        String sql = "select idbook, title, author, genre, status, editorial from book order by idbook";
+        try (PreparedStatement stmt = this.connection.prepareStatement(sql);
+             ResultSet rs = stmt.executeQuery()) {
+            while (rs.next()) {
+                model.addRow(new Object[] {
+                    rs.getInt("idbook"),
+                    rs.getString("title"),
+                    rs.getString("author"),
+                    rs.getString("genre"),
+                    // status: 1 = Available, 0 = Occupied
+                    rs.getInt("status") == 1 ? "Available" : "Occupied",
+                    rs.getString("editorial")
+                });
+            }
+        } catch (SQLException ex) {
+            showError(ex);
+        }
+        jTable1.setModel(model);
     }
     @SuppressWarnings("unchecked")
     // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
@@ -117,7 +111,7 @@ public class LibrarianDashboard extends javax.swing.JFrame {
 
         genrefield.setFont(new java.awt.Font("Serif", 2, 14)); // NOI18N
 
-        statusfield.setModel(new javax.swing.DefaultComboBoxModel<>(new String[] { "Occupied", "Available", " " }));
+        statusfield.setModel(new javax.swing.DefaultComboBoxModel<>(new String[] { "Occupied", "Available" }));
 
         jLabel2.setFont(new java.awt.Font("Serif", 2, 14)); // NOI18N
         jLabel2.setText("Title:");
@@ -233,55 +227,63 @@ public class LibrarianDashboard extends javax.swing.JFrame {
     }// </editor-fold>//GEN-END:initComponents
 
     private void jButton3ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton3ActionPerformed
+        // Close this session's connection; the new login window opens its own.
+        // Before, every logout left one more connection open.
         try {
-            Principal a = new Principal();
-            this.setVisible(false);
-            a.setVisible(true);
-        } catch (ClassNotFoundException ex) {
-            Logger.getLogger(AdminDashboard.class.getName()).log(Level.SEVERE, null, ex);
+            connection.close();
         } catch (SQLException ex) {
-            Logger.getLogger(AdminDashboard.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(LibrarianDashboard.class.getName()).log(Level.WARNING, null, ex);
         }
+        this.dispose();
+        Principal.showLogin();
     }//GEN-LAST:event_jButton3ActionPerformed
 
     private void jButton2ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton2ActionPerformed
-        if(jTable1.getSelectedRow() == -1) {
-            JOptionPane.showMessageDialog(this, "Please select some row", "E R R O R", JOptionPane.ERROR_MESSAGE);   
+        int row = jTable1.getSelectedRow();
+        if(row == -1) {
+            JOptionPane.showMessageDialog(this, "Please select some row", "E R R O R", JOptionPane.ERROR_MESSAGE);
+            return;
         }
-        else {
-            int row = jTable1.getSelectedRow();
-            try{
-                
-                PreparedStatement stmt = this.connection.prepareStatement("delete from book where idbook = ?", ResultSet.TYPE_SCROLL_SENSITIVE, ResultSet.CONCUR_READ_ONLY);
-                row +=1;
-                stmt.setInt(1, row);
-                
-                stmt.executeUpdate();
-                
-                JOptionPane.showMessageDialog(this, "Book Deleted", "Successful Operation", JOptionPane.INFORMATION_MESSAGE);
-                librarian_list();
-                    
-            } catch (SQLException ex) {
-                Logger.getLogger(AdminDashboard.class.getName()).log(Level.SEVERE, null, ex);
-            }
+
+        // Bug fix: before, the ID was "row number + 1", which deletes the wrong
+        // book as soon as the IDs have gaps. The real ID is in column 0.
+        int id = Integer.parseInt(model.getValueAt(jTable1.convertRowIndexToModel(row), 0).toString());
+        String title = model.getValueAt(jTable1.convertRowIndexToModel(row), 1).toString();
+
+        int answer = JOptionPane.showConfirmDialog(this, "Delete \"" + title + "\"?", "Confirm", JOptionPane.YES_NO_OPTION);
+        if (answer != JOptionPane.YES_OPTION) {
+            return;
+        }
+
+        try (PreparedStatement stmt = this.connection.prepareStatement("delete from book where idbook = ?")) {
+            stmt.setInt(1, id);
+            stmt.executeUpdate();
+
+            JOptionPane.showMessageDialog(this, "Book Deleted", "Successful Operation", JOptionPane.INFORMATION_MESSAGE);
+            librarian_list();
+
+        } catch (SQLException ex) {
+            showError(ex);
         }
     }//GEN-LAST:event_jButton2ActionPerformed
 
     private void jButton1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton1ActionPerformed
-        if(titlefield.getText().equals("") || authorfield.getText().equals("") || genrefield.getText().equals("") || editorialfield.getText().equals("")) {
+        // trim() so a field with only spaces also counts as empty
+        String title = titlefield.getText().trim();
+        String author = authorfield.getText().trim();
+        String genre = genrefield.getText().trim();
+        String editorial = editorialfield.getText().trim();
+        // The combo is {"Occupied", "Available"}, so its index is the value saved:
+        // 0 = Occupied, 1 = Available (the blank third option that saved 2 was removed)
+        int status = statusfield.getSelectedIndex();
+
+        if(title.isEmpty() || author.isEmpty() || genre.isEmpty() || editorial.isEmpty()) {
             JOptionPane.showMessageDialog(this, "Data incomplete", "E R R O R", JOptionPane.ERROR_MESSAGE);
         }
         else {
-            String title, author, genre, editorial;
-            int status;
-            title = titlefield.getText();
-            author = authorfield.getText();
-            genre = genrefield.getText();
-            status = statusfield.getSelectedIndex();
-            editorial = editorialfield.getText();
-            
-            try {
-                PreparedStatement stmt = this.connection.prepareStatement("insert into book (title, author, genre, status, editorial) values (?,?,?,?,?)", ResultSet.TYPE_SCROLL_SENSITIVE, ResultSet.CONCUR_READ_ONLY);
+            String sql = "insert into book (title, author, genre, status, editorial) values (?,?,?,?,?)";
+            // try-with-resources closes the statement automatically
+            try (PreparedStatement stmt = this.connection.prepareStatement(sql)) {
                 stmt.setString(1, title);
                 stmt.setString(2, author);
                 stmt.setString(3, genre);
@@ -299,44 +301,13 @@ public class LibrarianDashboard extends javax.swing.JFrame {
                 genrefield.setText("");
                 
                 librarian_list();
-                
+
             } catch (SQLException ex) {
-                Logger.getLogger(AdminDashboard.class.getName()).log(Level.SEVERE, null, ex);
-            } 
+                showError(ex);
+            }
         }
     }//GEN-LAST:event_jButton1ActionPerformed
 
-    public static void main(String args[]) {
-        /* Set the Nimbus look and feel */
-        //<editor-fold defaultstate="collapsed" desc=" Look and feel setting code (optional) ">
-        /* If Nimbus (introduced in Java SE 6) is not available, stay with the default look and feel.
-         * For details see http://download.oracle.com/javase/tutorial/uiswing/lookandfeel/plaf.html 
-         */
-        try {
-            for (javax.swing.UIManager.LookAndFeelInfo info : javax.swing.UIManager.getInstalledLookAndFeels()) {
-                if ("Nimbus".equals(info.getName())) {
-                    javax.swing.UIManager.setLookAndFeel(info.getClassName());
-                    break;
-                }
-            }
-        } catch (ClassNotFoundException ex) {
-            java.util.logging.Logger.getLogger(LibrarianDashboard.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (InstantiationException ex) {
-            java.util.logging.Logger.getLogger(LibrarianDashboard.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (IllegalAccessException ex) {
-            java.util.logging.Logger.getLogger(LibrarianDashboard.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (javax.swing.UnsupportedLookAndFeelException ex) {
-            java.util.logging.Logger.getLogger(LibrarianDashboard.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        }
-        //</editor-fold>
-
-        /* Create and display the form */
-        java.awt.EventQueue.invokeLater(new Runnable() {
-            public void run() {
-                new LibrarianDashboard().setVisible(true);
-            }
-        });
-    }
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JTextField authorfield;
     private javax.swing.JTextField editorialfield;

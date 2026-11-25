@@ -1,0 +1,5 @@
+# Copy this file to db.properties (same folder) and put your own MySQL credentials.
+# db.properties is ignored by git, so your password never reaches GitHub.
+db.url=jdbc:mysql://localhost:3306/libreria
+db.user=root
+db.password=change-me

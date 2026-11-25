@@ -6,10 +6,10 @@ package libraryproject_;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.sql.*;
-import java.util.*;
 import javax.swing.JOptionPane;
 import javax.swing.table.DefaultTableModel;
 /**
+ * Admin window: add, list and delete staff accounts.
  *
  * @author kevin
  */
@@ -28,8 +28,10 @@ public class AdminDashboard extends javax.swing.JFrame {
         librarian_list();
     }
 
-    private AdminDashboard() {
-        throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
+    // Shows SQL errors to the user instead of only writing them to the log
+    private void showError(SQLException ex) {
+        Logger.getLogger(AdminDashboard.class.getName()).log(Level.SEVERE, null, ex);
+        JOptionPane.showMessageDialog(this, "Database error:\n" + ex.getMessage(), "E R R O R", JOptionPane.ERROR_MESSAGE);
     }
 
     @SuppressWarnings("unchecked")
@@ -220,21 +222,22 @@ public class AdminDashboard extends javax.swing.JFrame {
     }//GEN-LAST:event_namefieldActionPerformed
 
     private void jButton1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton1ActionPerformed
-        if(namefield.getText().equals("") || lastnamefield.getText().equals("") || usernamefield.getText().equals("") || passwordfield.getText().equals("")) {
+        // trim() so a field with only spaces also counts as empty
+        String name = namefield.getText().trim();
+        String lastname = lastnamefield.getText().trim();
+        String age = agefield.getSelectedItem().toString();
+        String username = usernamefield.getText().trim();
+        // getPassword() replaces the deprecated getText() of JPasswordField
+        String password = new String(passwordfield.getPassword());
+
+        if(name.isEmpty() || lastname.isEmpty() || username.isEmpty() || password.isEmpty()) {
             JOptionPane.showMessageDialog(this, "Data incomplete", "E R R O R", JOptionPane.ERROR_MESSAGE);
         }
-        else {            
-            String name, lastname, username, password;
-            String age;
-            name = namefield.getText();
-            lastname = lastnamefield.getText();
-            age = agefield.getSelectedItem().toString();
-            username = usernamefield.getText();
-            password = passwordfield.getText();
-                         
-            try {
-                PreparedStatement stmt = this.connection.prepareStatement("insert into users (name, last_name, age, username, password) values (?,?,?,?,?)", ResultSet.TYPE_SCROLL_SENSITIVE, ResultSet.CONCUR_READ_ONLY);
-                
+        else {
+            // New accounts get the default role (librarian) defined in schema.sql
+            String sql = "insert into users (name, last_name, age, username, password) values (?,?,?,?,?)";
+            // try-with-resources closes the statement automatically
+            try (PreparedStatement stmt = this.connection.prepareStatement(sql)) {
                 stmt.setString(1, name);
                 stmt.setString(2, lastname);
                 stmt.setInt(3, Integer.parseInt(age));
@@ -252,87 +255,92 @@ public class AdminDashboard extends javax.swing.JFrame {
                 passwordfield.setText("");
                 
                 librarian_list();
-                
+
+            } catch (SQLIntegrityConstraintViolationException ex) {
+                // username is UNIQUE in the database
+                JOptionPane.showMessageDialog(this, "That username already exists", "E R R O R", JOptionPane.ERROR_MESSAGE);
             } catch (SQLException ex) {
-                Logger.getLogger(AdminDashboard.class.getName()).log(Level.SEVERE, null, ex);
-            } 
+                showError(ex);
+            }
         }
     }//GEN-LAST:event_jButton1ActionPerformed
 
     private void jButton2ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton2ActionPerformed
-        if(jTable1.getSelectedRow() == -1) {
-            JOptionPane.showMessageDialog(this, "Please select some row", "E R R O R", JOptionPane.ERROR_MESSAGE);   
+        int row = jTable1.getSelectedRow();
+        if(row == -1) {
+            JOptionPane.showMessageDialog(this, "Please select some row", "E R R O R", JOptionPane.ERROR_MESSAGE);
+            return;
         }
-        else {
-            int row = jTable1.getSelectedRow();
-            try{
-                
-                PreparedStatement stmt = this.connection.prepareStatement("delete from users where idusers = ?", ResultSet.TYPE_SCROLL_SENSITIVE, ResultSet.CONCUR_READ_ONLY);
-                row +=1;
-                stmt.setInt(1, row);
-                
-                stmt.executeUpdate();
-                
-                JOptionPane.showMessageDialog(this, "Librarian Deleted", "Successful Operation", JOptionPane.INFORMATION_MESSAGE);
-                librarian_list();
-                    
-            } catch (SQLException ex) {
-                Logger.getLogger(AdminDashboard.class.getName()).log(Level.SEVERE, null, ex);
-            }
+
+        // Bug fix: before, the ID was "row number + 1", which deletes the wrong
+        // account as soon as the IDs have gaps. The real ID is in column 0.
+        int id = Integer.parseInt(model.getValueAt(jTable1.convertRowIndexToModel(row), 0).toString());
+        String username = model.getValueAt(jTable1.convertRowIndexToModel(row), 4).toString();
+        String role = model.getValueAt(jTable1.convertRowIndexToModel(row), 5).toString();
+
+        // Deleting an admin could leave nobody able to log in as administrator
+        if ("admin".equals(role)) {
+            JOptionPane.showMessageDialog(this, "Admin accounts can't be deleted from here", "E R R O R", JOptionPane.ERROR_MESSAGE);
+            return;
         }
-        
+
+        int answer = JOptionPane.showConfirmDialog(this, "Delete the account \"" + username + "\"?", "Confirm", JOptionPane.YES_NO_OPTION);
+        if (answer != JOptionPane.YES_OPTION) {
+            return;
+        }
+
+        try (PreparedStatement stmt = this.connection.prepareStatement("delete from users where idusers = ?")) {
+            stmt.setInt(1, id);
+            stmt.executeUpdate();
+
+            JOptionPane.showMessageDialog(this, "Librarian Deleted", "Successful Operation", JOptionPane.INFORMATION_MESSAGE);
+            librarian_list();
+
+        } catch (SQLException ex) {
+            showError(ex);
+        }
     }//GEN-LAST:event_jButton2ActionPerformed
 
     private void jButton3ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton3ActionPerformed
+        // Close this session's connection; the new login window opens its own.
+        // Before, every logout left one more connection open.
         try {
-            Principal a = new Principal();
-            this.setVisible(false);
-            a.setVisible(true);
-        } catch (ClassNotFoundException ex) {
-            Logger.getLogger(AdminDashboard.class.getName()).log(Level.SEVERE, null, ex);
+            connection.close();
         } catch (SQLException ex) {
-            Logger.getLogger(AdminDashboard.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(AdminDashboard.class.getName()).log(Level.WARNING, null, ex);
         }
-        
+        this.dispose();
+        Principal.showLogin();
     }//GEN-LAST:event_jButton3ActionPerformed
+
+    // Reloads the table with every account in the users table
     public void librarian_list() {
-        try {
-                PreparedStatement stmt = this.connection.prepareStatement("select * from users",ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY);
-                
-                ResultSet rs = stmt.executeQuery();
-                
-                int records = 0;
-                if(rs.last()) {
-                    records = rs.getRow();
-                    rs.first();
-                }
-                String[] titulos = {"ID", "Name", "Last Name", "Age", "Username"};
-                String [][] data = new String[records][5];
-                
-                for (int i = 0; i < records; i++) {
-                    data[i][0] = String.valueOf(rs.getInt("idusers"));
-                    data[i][1] = rs.getString("name");
-                    data[i][2] = rs.getString("last_name");
-                    data[i][3] = String.valueOf(rs.getInt("age"));
-                    data[i][4] = rs.getString("username");
-                    rs.next();
-                }
-                
-                System.out.println("# de records: " + records);
-                
-                model = new DefaultTableModel(data, titulos);
-                jTable1.setModel(model);
-                
-            } catch (SQLException ex) {
-                Logger.getLogger(AdminDashboard.class.getName()).log(Level.SEVERE, null, ex);
+        String[] titulos = {"ID", "Name", "Last Name", "Age", "Username", "Role"};
+        // Start with an empty table and add one row per record
+        model = new DefaultTableModel(titulos, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false; // the table is read-only; changes go through the form
             }
-    }
-    public static void main(String args[]) {
-        java.awt.EventQueue.invokeLater(new Runnable() {
-            public void run() {
-                new AdminDashboard().setVisible(true);
+        };
+
+        String sql = "select idusers, name, last_name, age, username, role from users order by idusers";
+        try (PreparedStatement stmt = this.connection.prepareStatement(sql);
+             ResultSet rs = stmt.executeQuery()) {
+            while (rs.next()) {
+                model.addRow(new Object[] {
+                    rs.getInt("idusers"),
+                    rs.getString("name"),
+                    rs.getString("last_name"),
+                    rs.getInt("age"),
+                    rs.getString("username"),
+                    rs.getString("role")
+                });
             }
-        });
+        } catch (SQLException ex) {
+            showError(ex);
+        }
+        jTable1.setModel(model);
     }
 
     // Variables declaration - do not modify//GEN-BEGIN:variables

@@ -1,0 +1,68 @@
+name: v2 (Shelfwise)
+
+on:
+  push:
+    paths: ["v2/**", ".github/workflows/v2.yml"]
+  pull_request:
+    paths: ["v2/**", ".github/workflows/v2.yml"]
+
+jobs:
+  # Unit tests on the three operating systems (no database needed)
+  unit:
+    name: Unit tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    defaults:
+      run:
+        working-directory: v2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Build and test (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: ./mvnw -B verify
+      - name: Build and test (Windows)
+        if: runner.os == 'Windows'
+        run: .\mvnw.cmd -B verify
+
+  # Unit + integration tests against a real MySQL server
+  mysql:
+    name: MySQL integration tests
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ci-root-pass
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -pci-root-pass"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    defaults:
+      run:
+        working-directory: v2
+    env:
+      SHELFWISE_TEST_DB_URL: jdbc:mysql://127.0.0.1:3306/shelfwise_test?createDatabaseIfNotExist=true
+      SHELFWISE_TEST_DB_USER: root
+      SHELFWISE_TEST_DB_PASSWORD: ci-root-pass
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Build, unit and integration tests
+        run: ./mvnw -B verify
+      - name: Fail if the MySQL tests were skipped
+        run: |
+          # failsafe writes one report per IT class; make sure MySqlIT really ran
+          grep -q 'tests="5"' target/failsafe-reports/TEST-shelfwise.repository.jdbc.MySqlIT.xml
+          ! grep -q '<skipped' target/failsafe-reports/TEST-shelfwise.repository.jdbc.MySqlIT.xml

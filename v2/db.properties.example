@@ -1,0 +1,8 @@
+# Copy this file to db.properties (same folder) and put your own MySQL user.
+# db.properties is ignored by git, so your password never reaches GitHub.
+#
+# The "shelfwise" database and its tables are created automatically on the
+# first run, so the user needs permission to create databases (root does).
+db.url=jdbc:mysql://localhost:3306/shelfwise?createDatabaseIfNotExist=true
+db.user=root
+db.password=change-me

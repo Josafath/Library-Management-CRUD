@@ -1,6 +1,19 @@
 # Library-Management-CRUD
 
+[![v2 (Shelfwise)](https://github.com/Josafath/Library-Management-CRUD/actions/workflows/v2.yml/badge.svg)](https://github.com/Josafath/Library-Management-CRUD/actions/workflows/v2.yml)
+
 A desktop app to manage a small library, built with **Java Swing** and **MySQL** (JDBC).
+The repository keeps both versions so the evolution can be compared:
+
+| Folder | What it is |
+|--------|------------|
+| [`v1/`](v1) | The original NetBeans project, with its bugs and security problems fixed (described below). |
+| [`v2/`](v2) | **Shelfwise**: a rewrite with loans, members, full CRUD, hashed passwords, a layered design, Maven, 87 tests and CI. See [v2/README.md](v2/README.md). |
+
+---
+
+## v1
+
 There are two kinds of accounts:
 
 | Role | What they can do |
@@ -13,12 +26,6 @@ Login (Principal)
  ├── role = admin      → AdminDashboard      → users table
  └── role = librarian  → LibrarianDashboard  → book table
 ```
-
-## Versions
-
-| Folder | What it is |
-|--------|------------|
-| [`v1/`](v1) | The original NetBeans project, with its bugs and security problems fixed (see below). |
 
 ### What changed in v1
 
@@ -34,16 +41,16 @@ The code and screens are the original ones; only these problems were fixed:
 - The broken `main()` methods in the dashboards (they always threw an exception) were removed.
 - Added `schema.sql`, `db.properties.example` and `.gitignore`; compiled classes and NetBeans private settings are no longer in the repo.
 
-## Requirements
+### Requirements
 
 - **JDK 21** or newer
 - **MySQL 8**
 - **MySQL Connector/J 8.4.0** (the JDBC driver)
 - **Apache NetBeans** (optional; the project is a NetBeans/Ant project)
 
-## Setup
+### Setup
 
-### 1. Install the tools
+#### 1. Install the tools
 
 **Windows**
 
@@ -59,7 +66,7 @@ brew services start mysql
 brew install --cask netbeans   # optional
 ```
 
-### 2. Create the database
+#### 2. Create the database
 
 From the repository folder:
 
@@ -78,7 +85,7 @@ The script **drops and recreates** the `libreria` database and adds two demo acc
 | `admin` | `admin123` | admin |
 | `librarian` | `librarian123` | librarian |
 
-### 3. Configure the connection
+#### 3. Configure the connection
 
 Copy the template and put your own MySQL user and password:
 
@@ -94,12 +101,12 @@ copy v1\LibraryProject_\db.properties.example v1\LibraryProject_\db.properties
 
 `db.properties` is ignored by git, so the password stays on your machine.
 
-### 4. Add the JDBC driver
+#### 4. Add the JDBC driver
 
 Download [`mysql-connector-j-8.4.0.jar`](https://repo1.maven.org/maven2/com/mysql/mysql-connector-j/8.4.0/mysql-connector-j-8.4.0.jar)
 and save it as `v1/LibraryProject_/lib/mysql-connector-j-8.4.0.jar`.
 
-### 5. Run it
+#### 5. Run it
 
 **With NetBeans:** *File → Open Project* → `v1/LibraryProject_` → *Run* (F6).
 
@@ -117,7 +124,7 @@ javac -d build\classes src\libraryproject_\*.java
 java -cp "build\classes;lib\mysql-connector-j-8.4.0.jar" libraryproject_.LibraryProject_
 ```
 
-## Project structure
+### Project structure
 
 ```
 v1/
@@ -136,7 +143,7 @@ v1/
 The `.form` files belong to the NetBeans GUI builder; the code between the
 `GEN-BEGIN`/`GEN-END` markers is generated from them, so edit the layout in NetBeans.
 
-## Known limitations of v1
+### Known limitations of v1
 
 - Passwords are stored in plain text in the database.
 - Records can be created and deleted, but not edited.

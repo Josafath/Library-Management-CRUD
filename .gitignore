@@ -3,6 +3,9 @@ build/
 dist/
 **/nbproject/private/
 
+# Maven build output (v2)
+target/
+
 # Local database credentials (copy db.properties.example)
 db.properties
 
